@@ -1,8 +1,9 @@
-package com.example.medibolo.ui.firstscreen
+package com.example.medibolo.ui.camera
 
 import android.Manifest
 import android.util.Log
 import androidx.camera.core.CameraSelector
+import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.Preview
 import androidx.camera.lifecycle.ProcessCameraProvider
 import androidx.camera.view.PreviewView
@@ -25,6 +26,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.google.accompanist.permissions.ExperimentalPermissionsApi
 import com.google.accompanist.permissions.isGranted
@@ -35,7 +37,9 @@ private const val TAG = "CameraPreview"
 
 @OptIn(ExperimentalPermissionsApi::class)
 @Composable
-fun CameraPermissionScreen() {
+fun CameraPermissionScreen(
+    onTextScanned: (String) -> Unit = {},
+) {
     val cameraPermission = Manifest.permission.CAMERA
     val permissionState = rememberPermissionState(permission = cameraPermission)
 
@@ -47,7 +51,7 @@ fun CameraPermissionScreen() {
     when {
         permissionState.status.isGranted -> {
             // Permission granted, show camera preview
-            CameraPreview()
+            CameraPreview(onTextScanned = onTextScanned)
         }
 
         permissionState.status.shouldShowRationale -> {
@@ -104,7 +108,9 @@ fun PermissionDeniedMessage() {
 
 
 @Composable
-fun CameraPreview() {
+fun CameraPreview(
+    onTextScanned: (String) -> Unit = {},
+) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
     val previewView = remember { PreviewView(context) }
@@ -122,6 +128,15 @@ fun CameraPreview() {
             surfaceProvider = previewView.surfaceProvider
         }
 
+        val analyzer = TextAnalyzer(context, onTextScanned)
+
+        val imageAnalysis = ImageAnalysis.Builder()
+            .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+            .build()
+            .apply {
+                setAnalyzer(ContextCompat.getMainExecutor(context), analyzer)
+            }
+
         val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
 
         try {
@@ -129,7 +144,8 @@ fun CameraPreview() {
             cameraProvider.bindToLifecycle(
                 lifecycleOwner,
                 cameraSelector,
-                preview
+                preview,
+                imageAnalysis
             )
         } catch (e: Exception) {
             Log.e(TAG, "Failed to bind camera use cases", e)
